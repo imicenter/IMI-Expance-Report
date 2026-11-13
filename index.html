@@ -901,6 +901,54 @@
     </div>
   </div>
 
+  <!-- INSIGHTS + BUDGET + YEAR TREND -->
+  <style>
+    .ins-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px}
+    .ins-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px 16px;box-shadow:var(--shadow-sm)}
+    .ins-card .t{font-size:.68rem;font-weight:700;letter-spacing:.06em;color:var(--muted);text-transform:uppercase}
+    .ins-card .v{font-size:1.05rem;font-weight:700;margin-top:6px;color:var(--text)}
+    .ins-card .s{font-size:.75rem;color:var(--muted);margin-top:3px}
+    .up{color:var(--red)} .down{color:var(--green)}
+    .bud-row{display:grid;grid-template-columns:minmax(110px,1.2fr) 90px 1.6fr;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:.8rem}
+    .bud-row input{width:100%;padding:5px 7px;border-radius:7px;border:1px solid var(--border2);background:var(--card2);color:var(--text);font-size:.8rem}
+    .bud-bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden}
+    .bud-bar>div{height:100%;border-radius:99px}
+    .bud-sub{font-size:.68rem;color:var(--muted);margin-top:3px}
+    @media(max-width:700px){.bud-row{grid-template-columns:1fr 80px}.bud-row .bw{grid-column:1/-1}}
+  </style>
+  <div class="ins-row" id="insightRow"></div>
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">🎯 Monthly Budget</span><span style="font-size:.72rem;color:var(--muted)">Budget box me daalo (0 = no limit)</span></div>
+      <div class="panel-body" id="budgetBody"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">📈 Poore Saal ka Trend</span><span style="font-size:.72rem;color:var(--muted)">Bar pe click = mahina kholo</span></div>
+      <div class="panel-body"><div class="chart-container" style="height:340px"><canvas id="yearChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">🧱 Mahine-wise Category Kharch</span></div>
+      <div class="panel-body"><div class="chart-container" style="height:340px"><canvas id="stackChart"></canvas></div></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">🗓️ Din-wise Kharch Calendar</span><span style="font-size:.72rem;color:var(--muted)" id="calPeak"></span></div>
+      <div class="panel-body" id="calBody"></div>
+    </div>
+  </div>
+  <div class="two-col">
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">⚖️ Fixed vs Variable</span><span style="font-size:.72rem;color:var(--muted)">Fixed = Rent, Bills, Insurance</span></div>
+      <div class="panel-body" id="fixVarBody"></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header"><span class="panel-title">🔝 Is Mahine ke Top 5 Kharche</span></div>
+      <div class="panel-body" id="top5Body"></div>
+    </div>
+  </div>
+
   <!-- CATEGORY GRID + PIE CHART -->
   <div class="two-col">
     <div class="panel">
@@ -916,9 +964,9 @@
       <div class="panel-header">
         <span class="panel-title">📊 Expense Charts</span>
         <div class="chart-toggle">
-          <button class="chart-btn active" onclick="showChart('pie')">Pie</button>
+          <button class="chart-btn" onclick="showChart('pie')">Pie</button>
           <button class="chart-btn" onclick="showChart('bar')">Bar</button>
-          <button class="chart-btn" onclick="showChart('doughnut')">Donut</button>
+          <button class="chart-btn active" onclick="showChart('doughnut')">Donut</button>
         </div>
       </div>
       <div class="panel-body">
@@ -1230,7 +1278,7 @@ function renderCatGrid() {
 // CHARTS
 // ═══════════════════════════════════════════════════════
 let mainChartInst = null;
-let currentChartType = 'pie';
+let currentChartType = 'doughnut';
 
 function getChartColors() {
   return isDark ? '#e6edf3' : '#0f172a';
@@ -1259,8 +1307,10 @@ function freshCanvas(id) {
 
 function renderMainChart(type) {
   const {catTotals} = getStats();
-  const labels = Object.keys(catTotals);
-  const data   = Object.values(catTotals);
+  const entries = Object.entries(catTotals).sort((a,b)=>b[1]-a[1]);
+  const labels = entries.map(e=>e[0]);
+  const data   = entries.map(e=>e[1]);
+  const sum    = data.reduce((a,b)=>a+b,0);
   const colors = labels.map(l => (catConfig[l]||{color:'#64748b'}).color);
   const textColor = getChartColors();
   const gridColor = getGridColor();
@@ -1272,11 +1322,17 @@ function renderMainChart(type) {
   const isPie = type === 'pie' || type === 'doughnut';
   mainChartInst = new Chart(ctx, {
     type,
+    plugins: [{ id:'centerTotal', afterDraw(c) {
+      if (type !== 'doughnut' || !sum) return;
+      const a = c.chartArea, x = (a.left+a.right)/2, y = (a.top+a.bottom)/2, g = c.ctx;
+      g.save(); g.textAlign='center'; g.textBaseline='middle'; g.fillStyle = textColor;
+      g.font = '600 11px sans-serif'; g.fillText('Total', x, y-14);
+      g.font = '700 20px sans-serif'; g.fillText('₹'+Math.round(sum).toLocaleString('en-IN'), x, y+8); g.restore(); } }],
     data: {
       labels,
       datasets: [{
         data,
-        backgroundColor: isPie ? colors.map(c=>c+'cc') : colors.map(c=>c+'bb'),
+        backgroundColor: isPie ? colors.map(c=>c+'e6') : colors.map(c=>c+'bb'),
         borderColor: isDark ? '#161b22' : '#ffffff',
         borderWidth: isPie ? 2 : 0,
         borderRadius: isPie ? 0 : 8,
@@ -1284,6 +1340,7 @@ function renderMainChart(type) {
       }]
     },
     options: {
+      cutout: type === 'doughnut' ? '62%' : 0,
       responsive: true,
       maintainAspectRatio: false,
       plugins: {
@@ -1292,7 +1349,7 @@ function renderMainChart(type) {
           position: 'bottom',
           labels: { color: textColor, font:{size:10,weight:'600'}, padding:12, boxWidth:12 }
         },
-        tooltip: { callbacks: { label: ctx => ' ₹'+ctx.raw.toLocaleString('en-IN') } }
+        tooltip: { callbacks: { label: c => ' ₹'+c.raw.toLocaleString('en-IN') + (isPie && sum ? ' ('+(c.raw/sum*100).toFixed(1)+'%)' : '') } }
       },
       scales: isPie ? {} : {
         x: { ticks:{color:textColor,font:{size:10}}, grid:{color:gridColor} },
@@ -1427,7 +1484,8 @@ function updateAddFormDropdown() {
 // ═══════════════════════════════════════════════════════
 function deleteExpense(idx) {
   if (!confirm(`Delete: "${expenses[idx].desc}" (₹${expenses[idx].amt})?`)) return;
-  expenses.splice(idx, 1);
+  lastDeleted = expenses.splice(idx, 1)[0];
+  showUndo();
   saveToStorage();
   renderAll();
 }
@@ -1451,6 +1509,7 @@ function addExpense() {
     alert('Sab fields bharo aur amount sahi dalo!');
     return;
   }
+  if (expenses.some(e => e.date===date && e.cat===cat && e.amt===amt) && !confirm('Isi date, category aur amount ki entry pehle se hai. Phir bhi add karein?')) return;
   expenses.push({date, cat, desc, amt});
   saveToStorage();
   document.getElementById('newDesc').value = '';
@@ -1492,7 +1551,7 @@ function exportCSV() {
 // BACKUP / RESTORE (JSON)
 // ═══════════════════════════════════════════════════════
 function exportBackup() {
-  const backup = { expenses, catConfig, isDark, exportedAt: new Date().toISOString() };
+  const backup = { expenses, catConfig, budgets, isDark, exportedAt: new Date().toISOString() };
   const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
   const url  = URL.createObjectURL(blob);
   const a    = document.createElement('a');
@@ -1512,6 +1571,7 @@ function importBackup(event) {
       if (!confirm(`Backup file me ${data.expenses.length} entries hain. Yeh current data ko REPLACE kar dega. Continue?`)) return;
       expenses = data.expenses;
       if (data.catConfig) catConfig = data.catConfig;
+      if (data.budgets) budgets = data.budgets;
       if (typeof data.isDark === 'boolean') isDark = data.isDark;
       saveToStorage();
       applyThemeUI();
@@ -1717,6 +1777,183 @@ function exportSnapshot() {
   URL.revokeObjectURL(url);
 }
 
+
+// ═══════════════════════════════════════════════════════
+// BUDGET + INSIGHTS + YEAR TREND
+// ═══════════════════════════════════════════════════════
+const rupee = n => '₹' + Math.round(n).toLocaleString('en-IN');
+function monthSum(y, m) {
+  const pre = `${y}-${String(m+1).padStart(2,'0')}-`;
+  return expenses.reduce((a,e)=> e.date.startsWith(pre) ? a+e.amt : a, 0);
+}
+function prevMonthInfo() {
+  const m = activeMonthIdx, y = getMonthYear(m);
+  const pm = (m+11)%12, py = m===0 ? y-1 : y;
+  return {pm, py, total: monthSum(py, pm), catTotals: expenses.filter(e=>e.date.startsWith(`${py}-${String(pm+1).padStart(2,'0')}-`)).reduce((o,e)=>(o[e.cat]=(o[e.cat]||0)+e.amt,o),{})};
+}
+function isCurrentMonth() {
+  return today.getMonth()===activeMonthIdx && today.getFullYear()===getMonthYear(activeMonthIdx);
+}
+function setBudget(key, val) {
+  const n = parseFloat(val);
+  if (isNaN(n) || n <= 0) delete budgets[key]; else budgets[key] = n;
+  saveToStorage(); renderBudget(); renderInsights();
+}
+function renderBudget() {
+  const {total, catTotals} = getStats();
+  const barColor = r => r >= 1 ? 'var(--red)' : r >= 0.8 ? 'var(--yellow)' : 'var(--green)';
+  const row = (label, key, spent, color) => {
+    const b = budgets[key] || 0, r = b ? spent/b : 0;
+    const bar = b ? `<div class="bud-bar"><div style="width:${Math.min(r*100,100)}%;background:${barColor(r)}"></div></div>
+      <div class="bud-sub">${rupee(spent)} / ${rupee(b)} · ${b-spent>=0 ? rupee(b-spent)+' bacha' : '<span class="up">'+rupee(spent-b)+' zyada</span>'}</div>`
+      : `<div class="bud-sub">${rupee(spent)} kharch · budget set nahi</div>`;
+    return `<div class="bud-row"><div style="font-weight:600;color:${color||'var(--text)'}">${label}</div>
+      <input type="number" min="0" placeholder="Budget" value="${b||''}" onchange="setBudget('${key.replace(/'/g,"\\'")}', this.value)">
+      <div class="bw">${bar}</div></div>`;
+  };
+  document.getElementById('budgetBody').innerHTML =
+    row('💰 Total', '_total', total, 'var(--accent)') +
+    Object.keys(catConfig).map(c => row(`${catConfig[c].icon} ${c}`, c, catTotals[c]||0)).join('');
+}
+function renderInsights() {
+  const {total, catTotals, topCat, daysInMonth} = getStats();
+  const prev = prevMonthInfo(), cards = [];
+  // 1. pichle mahine se tulna
+  if (prev.total > 0) {
+    const d = total - prev.total, pct = Math.abs(d/prev.total*100).toFixed(0);
+    cards.push(['Pichle mahine se', `<span class="${d>0?'up':'down'}">${d>0?'▲':'▼'} ${pct}%</span>`, `${MONTH_NAMES[prev.pm].slice(0,3)}: ${rupee(prev.total)} → ab ${rupee(total)}`]);
+  } else cards.push(['Pichle mahine se', '—', 'Pichle mahine ka data nahi']);
+  // 2. sabse zyada badhi category
+  let worst = null;
+  Object.keys(catTotals).forEach(c => { const dd = catTotals[c] - (prev.catTotals[c]||0); if (dd > 0 && (!worst || dd > worst.dd)) worst = {c, dd}; });
+  cards.push(['Sabse zyada badha', worst ? `${catConfig[worst.c]?.icon||''} ${worst.c}` : '—', worst ? `pichle mahine se +${rupee(worst.dd)}` : 'Koi category nahi badhi']);
+  // 3. projection ya top category share
+  if (isCurrentMonth() && total > 0) {
+    const proj = total / today.getDate() * daysInMonth, tb = budgets._total;
+    cards.push(['Mahine end tak (andaza)', rupee(proj), tb ? (proj>tb ? `<span class="up">Budget se ${rupee(proj-tb)} upar jayega</span>` : 'Budget ke andar rahega') : 'Isi raftaar se']);
+  } else cards.push(['Sabse bada kharch', topCat[1] ? `${topCat[0]}` : '—', topCat[1] ? `Total ka ${(topCat[1]/total*100).toFixed(0)}% (${rupee(topCat[1])})` : '']);
+  // 4. budget status
+  const over = Object.keys(budgets).filter(k => (k==='_total' ? total : (catTotals[k]||0)) > budgets[k]);
+  cards.push(['Budget status', Object.keys(budgets).length ? (over.length ? `<span class="up">${over.length} limit paar</span>` : '<span class="down">Sab theek</span>') : 'Set nahi', over.length ? over.map(k=>k==='_total'?'Total':k).join(', ') : (Object.keys(budgets).length ? 'Koi limit paar nahi hui' : 'Neeche budget daalo')]);
+  document.getElementById('insightRow').innerHTML = cards.map(c => `<div class="ins-card"><div class="t">${c[0]}</div><div class="v">${c[1]}</div><div class="s">${c[2]}</div></div>`).join('');
+}
+let yearChartInst = null;
+function renderYearChart() {
+  const vals = FY_MONTH_ORDER.map(m => monthSum(getMonthYear(m), m));
+  const filled = vals.filter(v => v > 0), avg = filled.length ? filled.reduce((a,b)=>a+b,0)/filled.length : 0;
+  try { if (yearChartInst) yearChartInst.destroy(); } catch(e) {}
+  const ctx = freshCanvas('yearChart');
+  const accent = getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#4f46e5';
+  yearChartInst = new Chart(ctx, {
+    data: {
+      labels: FY_MONTH_ORDER.map(m => MONTH_NAMES[m].slice(0,3)),
+      datasets: [
+        { type:'bar', label:'Kharch', data: vals, borderRadius:6,
+          backgroundColor: FY_MONTH_ORDER.map(m => m===activeMonthIdx ? accent : accent+'55') },
+        { type:'line', label:'Average ('+rupee(avg)+')', data: vals.map(()=>avg), borderColor:'#f59e0b', borderDash:[6,5], borderWidth:2, pointRadius:0, fill:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      onClick: (e, els) => { if (els.length) switchMonth(FY_MONTH_ORDER[els[0].index]); },
+      plugins: { legend:{ labels:{ color:getChartColors(), boxWidth:12 } },
+                 tooltip:{ callbacks:{ label: c => ' ' + c.dataset.label.split(' (')[0] + ': ' + rupee(c.parsed.y) } } },
+      scales: { x:{ ticks:{color:getChartColors()}, grid:{display:false} },
+                y:{ beginAtZero:true, ticks:{color:getChartColors(), callback:v=>'₹'+(v>=1000?(v/1000)+'k':v)}, grid:{color:getGridColor()} } }
+    }
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// STACKED CHART, CALENDAR HEATMAP, FIXED/VARIABLE, TOP 5, UNDO
+// ═══════════════════════════════════════════════════════
+const FIXED_CATS = ['Rent', 'Bills', 'Insurance'];
+let stackChartInst = null, lastDeleted = null, undoTimer = null;
+
+function renderStack() {
+  const fy = FY_MONTH_ORDER.map(m => ({m, pre: `${getMonthYear(m)}-${String(m+1).padStart(2,'0')}-`}));
+  const sets = Object.keys(catConfig).map(c => ({
+    label: c, backgroundColor: catConfig[c].color,
+    data: fy.map(x => expenses.reduce((a,e)=> e.cat===c && e.date.startsWith(x.pre) ? a+e.amt : a, 0))
+  })).filter(d => d.data.some(v => v > 0));
+  try { if (stackChartInst) stackChartInst.destroy(); } catch(e) {}
+  const ctx = freshCanvas('stackChart');
+  stackChartInst = new Chart(ctx, {
+    type: 'bar',
+    data: { labels: fy.map(x => MONTH_NAMES[x.m].slice(0,3)), datasets: sets },
+    options: {
+      responsive: true, maintainAspectRatio: false, interaction: { mode: 'index' },
+      plugins: {
+        legend: { position: 'bottom', labels: { color: getChartColors(), boxWidth: 10, font: { size: 10 } } },
+        tooltip: { filter: i => i.parsed.y > 0, callbacks: {
+          label: c => ' ' + c.dataset.label + ': ' + rupee(c.parsed.y),
+          footer: items => 'Total: ' + rupee(items.reduce((a,i)=>a+i.parsed.y,0)) } }
+      },
+      scales: { x: { stacked: true, ticks: { color: getChartColors() }, grid: { display: false } },
+                y: { stacked: true, ticks: { color: getChartColors(), callback: v => '₹' + (v>=1000 ? (v/1000)+'k' : v) }, grid: { color: getGridColor() } } }
+    }
+  });
+}
+
+function renderCalendar() {
+  const {dailyTotals, daysInMonth} = getStats();
+  const y = getMonthYear(activeMonthIdx), m = activeMonthIdx;
+  const max = Math.max(0, ...Object.values(dailyTotals));
+  const offset = (new Date(y, m, 1).getDay() + 6) % 7;
+  const short = n => n >= 1000 ? (n/1000).toFixed(1).replace('.0','') + 'k' : n;
+  let cells = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d => `<div style="text-align:center;font-size:.65rem;color:var(--muted);font-weight:700">${d}</div>`).join('');
+  for (let i = 0; i < offset; i++) cells += '<div></div>';
+  let peak = null;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const key = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`, v = dailyTotals[key] || 0, r = max ? v/max : 0;
+    if (v && (!peak || v > peak.v)) peak = {d, v};
+    const bg = v ? `rgba(99,102,241,${(0.15 + 0.8*r).toFixed(2)})` : 'var(--card2)';
+    cells += `<div title="${d} ${MONTH_NAMES[m].slice(0,3)}: ${rupee(v)}" style="background:${bg};border-radius:8px;padding:5px 2px;text-align:center;min-height:46px;color:${r>0.5?'#fff':'var(--text)'}">
+      <div style="font-size:.65rem;opacity:.75">${d}</div><div style="font-size:.72rem;font-weight:700">${v ? short(v) : ''}</div></div>`;
+  }
+  document.getElementById('calBody').innerHTML = `<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:5px">${cells}</div>`;
+  document.getElementById('calPeak').textContent = peak ? `Sabse zyada: ${peak.d} ${MONTH_NAMES[m].slice(0,3)} (${rupee(peak.v)})` : '';
+}
+
+function renderAnalysis() {
+  const {total, monthExp} = getStats();
+  const fixed = monthExp.filter(e => FIXED_CATS.includes(e.cat)).reduce((a,e)=>a+e.amt,0), vari = total - fixed;
+  const fp = total ? fixed/total*100 : 0;
+  document.getElementById('fixVarBody').innerHTML = total ? `
+    <div style="display:flex;height:22px;border-radius:99px;overflow:hidden;background:var(--border)">
+      <div style="width:${fp}%;background:var(--purple)"></div><div style="width:${100-fp}%;background:var(--teal)"></div></div>
+    <div style="display:flex;justify-content:space-between;margin-top:12px;font-size:.85rem">
+      <div><span style="color:var(--purple)">●</span> Fixed<br><b>${rupee(fixed)}</b> <span style="color:var(--muted)">(${fp.toFixed(0)}%)</span></div>
+      <div style="text-align:right"><span style="color:var(--teal)">●</span> Variable<br><b>${rupee(vari)}</b> <span style="color:var(--muted)">(${(100-fp).toFixed(0)}%)</span></div></div>
+    <div style="font-size:.72rem;color:var(--muted);margin-top:10px">Control variable kharche pe hota hai: Food, Travel, Shop, Home waghera.</div>`
+    : '<div style="color:var(--muted);font-size:.85rem">Is mahine koi entry nahi.</div>';
+  const top = [...monthExp].sort((a,b)=>b.amt-a.amt).slice(0,5);
+  document.getElementById('top5Body').innerHTML = top.length ? top.map((e,i) => {
+    const cfg = catConfig[e.cat] || {icon:'📌', color:'#64748b'};
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:.82rem">
+      <div style="width:22px;color:var(--muted);font-weight:700">${i+1}</div>
+      <div style="flex:1"><div style="font-weight:600;color:var(--text)">${e.desc}</div>
+        <div style="font-size:.7rem;color:var(--muted)">${cfg.icon} ${e.cat} · ${new Date(e.date).toLocaleDateString('en-IN',{day:'2-digit',month:'short'})}</div></div>
+      <div style="font-weight:700;color:var(--red)">${rupee(e.amt)}</div></div>`;
+  }).join('') : '<div style="color:var(--muted);font-size:.85rem">Is mahine koi entry nahi.</div>';
+}
+
+function showUndo() {
+  let t = document.getElementById('undoToast');
+  if (!t) {
+    t = document.createElement('div'); t.id = 'undoToast';
+    t.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:56px;z-index:1000;background:var(--text);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:13px;gap:14px;align-items:center;box-shadow:var(--shadow)';
+    document.body.appendChild(t);
+  }
+  t.innerHTML = 'Entry delete ho gayi <button onclick="undoDelete()" style="background:none;border:none;color:var(--accent2);font-weight:700;cursor:pointer;font-size:13px">↩ Undo</button>';
+  t.style.display = 'flex'; clearTimeout(undoTimer); undoTimer = setTimeout(() => { t.style.display = 'none'; lastDeleted = null; }, 8000);
+}
+function undoDelete() {
+  if (!lastDeleted) return;
+  expenses.push(lastDeleted); lastDeleted = null; saveToStorage(); renderAll();
+  document.getElementById('undoToast').style.display = 'none';
+}
+
 // ═══════════════════════════════════════════════════════
 // RENDER ALL
 // ═══════════════════════════════════════════════════════
@@ -1730,6 +1967,7 @@ function renderAll() {
   updateFilterDropdown();
   updateAddFormDropdown();
   renderTable();
+  renderInsights(); renderBudget(); renderYearChart(); renderStack(); renderCalendar(); renderAnalysis();
 }
 
 // Modal close on overlay click
@@ -1742,12 +1980,15 @@ document.getElementById('clearModal').addEventListener('click', function(e){ if(
 const LS_EXPENSES = 'imi_expenses_v1';
 const LS_CATS     = 'imi_catConfig_v1';
 const LS_THEME    = 'imi_theme_v1';
+const LS_BUDGET   = 'imi_budgets_v1';
+let budgets = {};
 
 function saveToStorage() {
   try {
     localStorage.setItem(LS_EXPENSES, JSON.stringify(expenses));
     localStorage.setItem(LS_CATS,     JSON.stringify(catConfig));
     localStorage.setItem(LS_THEME,    isDark ? 'dark' : 'light');
+    localStorage.setItem(LS_BUDGET,   JSON.stringify(budgets));
   } catch(e) { console.warn('Storage save failed:', e); }
   if (typeof cloudSave === 'function') cloudSave();
 }
@@ -1760,6 +2001,7 @@ function loadFromStorage() {
     if (savedExp)  expenses   = JSON.parse(savedExp);
     if (savedCats) catConfig  = JSON.parse(savedCats);
     if (savedTheme) isDark    = savedTheme === 'dark';
+    const savedBud = localStorage.getItem(LS_BUDGET); if (savedBud) budgets = JSON.parse(savedBud);
   } catch(e) { console.warn('Storage load failed:', e); }
 }
 
@@ -1840,7 +2082,7 @@ function cloudSave(){
   clearTimeout(cloudTimer);
   setCloudStatus('☁️ Saving…');
   cloudTimer = setTimeout(() => {
-    cloudRef.set({ expenses, catConfig, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
+    cloudRef.set({ expenses, catConfig, budgets, updatedAt: firebase.firestore.FieldValue.serverTimestamp() })
       .then(() => setCloudStatus('☁️ Synced'))
       .catch(err => { console.error(err); setCloudStatus('⚠️ Sync error: ' + (err.code||'save')); });
   }, 400);
@@ -1857,6 +2099,7 @@ function startCloudSync(){
       applyingRemote = true;
       expenses = data.expenses;
       if (data.catConfig) catConfig = data.catConfig;
+      if (data.budgets) budgets = data.budgets;
       saveToStorage();                                   // local copy update (cloud pe wapas nahi jayega)
       applyingRemote = false;
       renderAll();
